@@ -1,4 +1,4 @@
-# smartonfhirapp
+# Smart on fhir app python template
 
 A starting point for a smart on fhir app for python
 
