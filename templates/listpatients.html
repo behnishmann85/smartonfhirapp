@@ -1,0 +1,41 @@
+  {% extends 'layout.html' %}
+  {% block content %}
+  <h2>Patient List</h2>
+  <form class="row mb-4" method="GET" action="listpatients">
+    <div class="col">
+      <input type="text" name="given" class="form-control" placeholder="Given Name">
+    </div>
+    <div class="col">
+      <input type="text" name="family" class="form-control" placeholder="Family Name">
+    </div>
+    <div class="col">
+      <button type="submit" class="btn btn-primary">Search</button>
+      <a href="/createpatient" class="btn btn-success">+ Add New Patient</a>
+    </div>
+  </form>
+
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Name</th><th>Gender</th><th>Birth Date</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in patients %}
+      <tr>
+        <td>{{ p['name'][0]['given'][0] if p.get('name') }} {{ p['name'][0]['family'] if p.get('name') }}</td>
+        <td>{{ p['gender'] }}</td>
+        <td>{{ p['birthDate'] }}</td>
+        <td>
+          <a href="/editpatient/{{ p['id'] }}" class="btn btn-sm btn-warning">Edit</a>
+          <form method="POST" action="/deletepatient/{{ p['id'] }}" style="display:inline;">
+            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this patient?')">Delete</button>
+          </form>
+          <a href="/details/{{ p['id'] }}" class="btn btn-sm btn-info">View Details</a>
+
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+    {% endblock %}
