@@ -29,11 +29,10 @@
             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
               Patient
             </a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-              <a class="dropdown-item" href="{{ url_for('search') }}">Read By Id</a>
-              <a class="dropdown-item" href="{{ url_for('search1') }}">Search By Name</a>
-              <a class="dropdown-item" href="{{ url_for('listpatients') }}">List Patient</a>
-              <a class="dropdown-item" href="{{ url_for('createob') }}">List Observations</a>
+            <div class="dropdown-menu" aria-labelledby="navbarDropdown">              
+              <a class="dropdown-item" href="{{ url_for('search') }}">Search By Name</a>
+              <a class="dropdown-item" href="{{ url_for('createpatient') }}">Create Patient</a>              
+              <a class="dropdown-item" href="{{ url_for('listpatients') }}">List Patient</a>              
             </div>
         </li>
         </ul>

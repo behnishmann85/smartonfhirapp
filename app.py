@@ -8,8 +8,27 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return 'Hello, World!'
+    return render_template('index.html')
 
+@app.route('/launch')
+def launch():
+    return render_template('launch.html')
+
+@app.route('/patient')
+def patient():
+    return render_template('patient.html')
+
+@app.route('/createpatient')
+def createpatient():
+    return render_template('createpatient.html')
+
+@app.route('/listpatients')
+def listpatients():
+    return render_template('listpatients.html')
+
+@app.route('/search')
+def search():
+    return render_template('search.html')
 
 if __name__ == '__main__':
     import flaskbeaker
