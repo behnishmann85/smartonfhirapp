@@ -1,0 +1,66 @@
+{% extends 'layout.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<h3 class="display-4">Search Patient By Id</h3>
+	<form method="post" action="{{ url_for('createob')}}">
+		  <div class="row form-group">
+			  <div class="col-2">
+				  Patient Id
+			  </div>
+			  <div class="col-4">
+			  {% if success %}
+				  <input type="text" id="patientId" name="patientId" class="form-control" value="{{patient.id}}">
+			  {% else %}
+				  <input type="text" id="patientId" name="patientId" class="form-control">
+				{% endif %}
+			  </div>
+		  </div>
+		  <div class="row form-group">
+			  <div class="col-2"></div>
+			  <div class="col-4">
+				  <input type="submit" value="Search" class="btn btn-success">
+			  </div>
+		  </div>
+	</form>
+
+{% if success %}
+	<div class="row">
+		<div class="col">
+			{{patient.serialize()}}
+		</div>
+	</div>
+	<div class="row mt-5 mb-5">
+		<div class="col-10">
+
+		</div>
+		<div class="col-2">
+			<a href="/createObservation.html?patientId={{patient.id}}" class="btn btn-success"> Create Observation</a>
+		</div>
+	</div>
+	<div class="row">
+			<div class="col">
+				<table class="table">
+					<thead>
+						<tr class="font-weight-bold">
+							<td>ID</td>
+							<td>Status</td>
+							<td>Effective DateTime</td>
+							<td>Actions</td>
+						</tr>
+					</thead>
+					 {% for observation in observations: %}
+						<tr>
+							<td>{{ observation.id }}</td>
+							<td>{{ observation.status }}</td>
+							<td>{{ observation.effectiveDateTime }}</td>
+							<td><a href="/edit.html?ObservationId={{observation.id}}"> Edit</a>
+								| <a href="/delete.html?ObservationId={{observation.id}}"> Delete</a></td>
+						</tr>
+					{% endfor %}
+			</table>
+		</div>
+	</div>
+{% endif %}
+{% endblock %}
