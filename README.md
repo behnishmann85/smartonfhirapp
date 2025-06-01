@@ -2,7 +2,12 @@
 
 A starting point for a smart on fhir app for python
 
-Packages to install during build 
+## Installation
+
+Install latest version of python on your computer
+Install VS code
+
+## Packages to install during build 
 
 pip install fhir.resources
 
