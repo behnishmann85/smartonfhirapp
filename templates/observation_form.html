@@ -5,10 +5,6 @@
 
   <form method="POST" class="mt-3">
     <div class="mb-3">
-      <label for="code" class="form-label">Code</label>
-      <input type="text" class="form-control" id="code" name="code" required value="{{ obs.code.text if obs.code else '' }}">
-    </div>
-    <div class="mb-3">
         <label for="status" class="form-label">Status</label>
         <select class="form-control" name="status" id="status" required>
         {% set current = obs.status or '' %}
@@ -17,7 +13,6 @@
         {% endfor %}
         </select>
     </div>
-
     <div class="mb-3">
       <label for="value" class="form-label">Value</label>
       <input type="number" step="any" class="form-control" id="value" name="value" required value="{{ obs.valueQuantity.value if obs.valueQuantity else '' }}">
@@ -28,6 +23,11 @@
       <input type="text" class="form-control" id="unit" name="unit" required value="{{ obs.valueQuantity.unit if obs.valueQuantity else '' }}">
     </div>
 
+    <div class="mb-3">
+    <label for="issued" class="form-label">Issued Date</label>
+    <input type="date" class="form-control" name="issued" id="issued"
+          value="{{ obs.issued if obs.issued else '' }}">
+  </div>
     <button type="submit" class="btn btn-success">Save</button>
     <a href="{{ url_for('list_observations', patient_id=patient_id) }}" class="btn btn-secondary">Cancel</a>
   </form>

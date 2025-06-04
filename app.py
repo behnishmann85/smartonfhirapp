@@ -2,27 +2,32 @@ import uuid
 from fhirpy import SyncFHIRClient
 import requests
 import logging
-import threading
 
 from flask import Flask, request, redirect, session, render_template, url_for
-
 
 app = Flask(__name__)
 
 FHIR_SERVER_URL = "http://157.245.79.105:8080/fhir"
 
-RESOURCE_TYPES = {
-    "observation": "Observation",
-    "careplan": "CarePlan",
-    "medicationrequest": "MedicationRequest",
-    "condition": "Condition",
-    "goal": "Goal",
-    "immunization": "Immunization"
-}
+# Epic Oauth Connectivity
 
+# SMART config
+FHIR_AUTH_URL = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize"
+FHIR_TOKEN_URL = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token"
+FHIR_API_URL = "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/"
+CLIENT_ID = "ffb905d2-f94d-4cb5-a29c-0b048275f662"
+REDIRECT_URI = "http://localhost:5000/Home"
+SCOPES = "patient/launch,patient/Goal.write,patient/Goal.read,patient/Goal.search,patient/Observation.search,patient/Observation.read,patient/Observation.write,patient/Patient.read"
+
+FHIR_AUTH_URL2 = "https://keycloak.testphysicalactivity.com/realms/physical_activity/protocol/openid-connect/auth"
+FHIR_TOKEN_URL2 = "https://keycloak.testphysicalactivity.com/realms/physical_activity/protocol/openid-connect/token"
+FHIR_API_URL2 = "https://fhir.testphysicalactivity.com/fhir/"
+CLIENT_ID2 = "physical_activity"
+REDIRECT_URI2 = "http://localhost:5000/call-back"
+SCOPES2 = "patient/Patient.read"
 
 def getConnection(access_token):    
-    if(access_token!=""):
+    if(access_token is not None):
         print('secured')
         client = SyncFHIRClient(
             FHIR_API_URL2,
@@ -33,13 +38,9 @@ def getConnection(access_token):
             )
     else:
         client = SyncFHIRClient(FHIR_SERVER_URL)
+        print('unsecured')
 
     return client
-
-def fetch_resources(resource_type, patient_id, result_container):
-    access_token = session.get("access_token")
-    resources = getConnection(access_token).resources(resource_type).search(patient=patient_id).limit(100).fetch()
-    result_container[resource_type] = resources
 
 # View functions
     
@@ -109,7 +110,7 @@ def listpatients():
 def list_observations(patient_id):
     access_token = session.get("access_token")
     client = getConnection(access_token)
-    observations = client.resources('Observation').search(patient=patient_id).limit(50).fetch()
+    observations = client.resources('Observation').search(patient=patient_id).limit(20).fetch()
     return render_template("observation_view.html", patient_id=patient_id,
                            observations=[o.serialize() for o in observations])
 
@@ -121,30 +122,45 @@ def edit_observation(patient_id, obs_id=None):
     observation = None
 
     if obs_id:
-        observation = client.resources('Observation').get(obs_id)
-        obs_data = observation.serialize()
+        # Fetch existing Observation
+        observation = client.reference("Observation", obs_id).to_resource()
     else:
-        obs_data = {}
+        # Create new Observation
+        observation = client.resource("Observation")
 
     if request.method == "POST":
         form = request.form
-        if observation:
-            observation['valueQuantity']['value'] = float(form['value'])
-            observation['valueQuantity']['unit'] = form['unit']
-        else:
-            observation = client.resource('Observation', {
-                "status": "final",
-                "code": {"text": form['code']},
-                "subject": {"reference": f"Patient/{patient_id}"},
-                "valueQuantity": {
-                    "value": float(form['value']),
-                    "unit": form['unit']
-                }
-            })
+
+        # Update or assign values
+        observation.status = form.get("status")
+        observation.subject = {"reference": f"Patient/{patient_id}"}
+        observation.valueQuantity = {
+            "value": float(form.get("value", 0)),
+            "unit": form.get("unit")
+        }
+        
+        issued = form.get("issued")
+        if issued:
+            observation.issued = issued
+
         observation.save()
         return redirect(url_for('list_observations', patient_id=patient_id))
 
-    return render_template("observation_form.html", obs=obs_data, patient_id=patient_id)
+    return render_template(
+        "observation_form.html",
+        obs=observation,
+        patient_id=patient_id,
+        action="Edit" if obs_id else "Create"
+    )
+    
+
+@app.route('/delete_observation/<patient_id>/<obs_id>', methods=["POST"])
+def delete_observation(patient_id, obs_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    observation = client.resources('Observation').get(obs_id)
+    observation.delete()
+    return redirect(url_for('list_observations', patient_id=patient_id))
 
 @app.route('/goal/<patient_id>')
 def list_goals(patient_id):
@@ -154,7 +170,6 @@ def list_goals(patient_id):
     return render_template("goal_view.html", patient_id=patient_id,
                            goals=[g.serialize() for g in goals])
 
-
 @app.route('/goaledit/<patient_id>', methods=["GET", "POST"])
 @app.route('/goaledit/<patient_id>/<goal_id>', methods=["GET", "POST"])
 def edit_goal(patient_id, goal_id=None):
@@ -163,27 +178,33 @@ def edit_goal(patient_id, goal_id=None):
     goal = None
 
     if goal_id:
-        goal = client.resources('Goal').get(goal_id)
-        goal_data = goal.serialize()
+        # Fetch existing goal for editing
+        goal = client.reference("Goal", goal_id).to_resource()
+        print(goal)
     else:
-        goal_data = {}
+        # For new goal creation
+        goal = client.resource("Goal")
+        
 
     if request.method == "POST":
         form = request.form
-        if goal:
-            goal['description']['text'] = form['description']
-            goal['lifecycleStatus'] = form['status']
-        else:
-            goal = client.resource('Goal', {
-                "lifecycleStatus": form['status'],
-                "description": {"text": form['description']},
-                "subject": {"reference": f"Patient/{patient_id}"}
-            })
+
+        # Assign or update fields
+        goal.lifecycleStatus = form.get("status")
+        goal.description = {"text": form.get("description")}
+        goal.subject = {"reference": f"Patient/{patient_id}"}
+
+        # Optional fields (if included in the form)
+        start_date = form.get("startDate")
+        due_date = form.get("dueDate")
+        if start_date or due_date:
+            goal.startDate = start_date if start_date else None
+            goal.target = [{"dueDate": due_date}] if due_date else []
+
         goal.save()
         return redirect(url_for('list_goals', patient_id=patient_id))
 
-    return render_template("goal_form.html", goal=goal_data, patient_id=patient_id)
-
+    return render_template("goal_form.html", goal=goal, patient_id=patient_id, action="Edit" if goal_id else "Create")
 
 @app.route('/goaldelete/<patient_id>/<goal_id>', methods=["POST"])
 def delete_goal(patient_id, goal_id):
@@ -201,7 +222,6 @@ def list_careplans(patient_id):
     return render_template("careplan_view.html", patient_id=patient_id,
                            careplans=[c.serialize() for c in plans])
 
-
 @app.route('/careplanedit/<patient_id>', methods=["GET", "POST"])
 @app.route('/careplanedit/<patient_id>/<careplan_id>', methods=["GET", "POST"])
 def edit_careplan(patient_id, careplan_id=None):
@@ -210,30 +230,31 @@ def edit_careplan(patient_id, careplan_id=None):
     careplan = None
 
     if careplan_id:
-        careplan = client.resources('CarePlan').get(careplan_id)
-        plan_data = careplan.serialize()
+        # Fetch existing CarePlan for editing
+        careplan = client.reference("CarePlan", careplan_id).to_resource()
     else:
-        plan_data = {}
+        # For new CarePlan creation
+        careplan = client.resource("CarePlan")
 
     if request.method == "POST":
         form = request.form
-        if careplan:
-            careplan['status'] = form['status']
-            careplan['description'] = form['description']
-            careplan['intent'] = form['intent']
-            careplan['created'] = form['created']
-        else:
-            careplan = client.resource('CarePlan', {
-                "status": form['status'],
-                "intent": form['intent'],
-                "description": form['description'],
-                "created": form['created'],
-                "subject": {"reference": f"Patient/{patient_id}"}
-            })
+
+        # Assign or update fields
+        careplan.status = form.get("status")
+        careplan.intent = form.get("intent")
+        careplan.description = form.get("description")
+        careplan.created = form.get("created")
+        careplan.subject = {"reference": f"Patient/{patient_id}"}
+
         careplan.save()
         return redirect(url_for('list_careplans', patient_id=patient_id))
 
-    return render_template("careplan_form.html", careplan=plan_data, patient_id=patient_id)
+    return render_template(
+        "careplan_form.html",
+        careplan=careplan,
+        patient_id=patient_id,
+        action="Edit" if careplan_id else "Create"
+    )
 
 
 @app.route('/careplandelete/<patient_id>/<careplan_id>', methods=["POST"])
@@ -243,24 +264,6 @@ def delete_careplan(patient_id, careplan_id):
     careplan = client.resources('CarePlan').get(careplan_id)
     careplan.delete()
     return redirect(url_for('list_careplans', patient_id=patient_id))
-
-# Epic Oauth Connectivity
-
-# SMART config
-FHIR_AUTH_URL = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize"
-FHIR_TOKEN_URL = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token"
-FHIR_API_URL = "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/"
-CLIENT_ID = "ffb905d2-f94d-4cb5-a29c-0b048275f662"
-REDIRECT_URI = "http://localhost:5000/Home"
-SCOPES = "patient/launch,patient/Goal.write,patient/Goal.read,patient/Goal.search,patient/Observation.search,patient/Observation.read,patient/Observation.write,patient/Patient.read"
-
-FHIR_AUTH_URL2 = "https://keycloak.testphysicalactivity.com/realms/physical_activity/protocol/openid-connect/auth"
-FHIR_TOKEN_URL2 = "https://keycloak.testphysicalactivity.com/realms/physical_activity/protocol/openid-connect/token"
-FHIR_API_URL2 = "https://fhir.testphysicalactivity.com/fhir/"
-CLIENT_ID2 = "physical_activity"
-REDIRECT_URI2 = "http://localhost:5000/call-back"
-SCOPES2 = "patient/Patient.read"
-
 
 @app.route("/launch")
 def launch():

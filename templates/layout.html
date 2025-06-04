@@ -20,13 +20,12 @@
           </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-              Epic
+              Secure Servers
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-              <a class="dropdown-item" href="{{ url_for('launch') }}">Launch</a>
-              <a class="dropdown-item" href="{{ url_for('launch2') }}">Secure Server</a>
-              <a class="dropdown-item" href="{{ url_for('epic') }}">Patient Details</a>
-              <a class="dropdown-item" href="{{ url_for('reset') }}">Reset Auth</a>
+              <a class="dropdown-item" href="{{ url_for('launch') }}">Epic Launch</a>
+              <a class="dropdown-item" href="{{ url_for('launch2') }}">Secure Server Launch</a>
+              <a class="dropdown-item" href="{{ url_for('epic') }}">Patient Profile</a>
             </div>
         </li>
           <li class="nav-item dropdown">
@@ -37,6 +36,9 @@
               <a class="dropdown-item" href="{{ url_for('listpatients') }}">List Patient</a>              
             </div>
         </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('reset') }}">Reset Auth</a>
+          </li>
         </ul>
       </div>
     </nav>
