@@ -1,0 +1,36 @@
+{% extends 'layout.html' %}
+
+  {% block content %}
+<h2>Observations for Patient {{ patient_id }}</h2>
+<a href="{{ url_for('edit_observation', patient_id=patient_id) }}" class="btn btn-primary mb-3">Add Observation</a>
+
+<table class="table table-bordered">
+  <thead class="table-light">
+    <tr>
+      <th>Code</th>
+      <th>Value</th>
+      <th>Unit</th>
+      <th>Status</th>
+      <th>Effective Date</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for obs in observations %}
+    <tr>
+      <td>{{ obs.code.text if obs.code and obs.code.text else 'N/A' }}</td>
+      <td>{{ obs.valueQuantity.value if obs.valueQuantity else '—' }}</td>
+      <td>{{ obs.valueQuantity.unit if obs.valueQuantity else '—' }}</td>
+      <td>{{ obs.status or '—' }}</td>
+      <td>{{ obs.effectiveDateTime or obs.effectivePeriod.start or '—' }}</td>
+      <td>
+        <a href="{{ url_for('edit_observation', patient_id=patient_id, obs_id=obs.id) }}" class="btn btn-sm btn-warning">Edit</a>
+        <!-- Optional: add delete functionality if desired -->
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+      {% endblock %}
+
