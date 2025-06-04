@@ -192,4 +192,4 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-session_data/container_file/5/5f/5f3d50a160ab491e8320854880a12c06.cache
+session_data/*
