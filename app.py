@@ -22,7 +22,7 @@ RESOURCE_TYPES = {
 
 
 def getConnection(access_token):    
-    if(access_token!="None"):
+    if(access_token is not None):
         print('secured')
         client = SyncFHIRClient(
             FHIR_API_URL2,
