@@ -23,7 +23,9 @@
     <tbody>
       {% for p in patients %}
       <tr>
-        <td>{{ p['name'][0]['given'][0] if p.get('name') }} {{ p['name'][0]['family'] if p.get('name') }}</td>
+        <td>{% set name = p.name[0] if p.name else {} %}
+{% set given = name.given[0] if name.given else '' %}
+{{ given }}</td>
         <td>{{ p['gender'] }}</td>
         <td>{{ p['birthDate'] }}</td>
         <td>
@@ -31,8 +33,18 @@
           <form method="POST" action="/deletepatient/{{ p['id'] }}" style="display:inline;">
             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this patient?')">Delete</button>
           </form>
-          <a href="/details/{{ p['id'] }}" class="btn btn-sm btn-info">View Details</a>
 
+          <!-- Dropdown for resource links -->
+        <div class="btn-group">
+          <button type="button" class="btn btn-sm btn-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            View Resources
+          </button>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('list_observations', patient_id=p.id) }}">Observations</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('list_goals', patient_id=p.id) }}">Goals</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('list_careplans', patient_id=p.id) }}">CarePlans</a></li>
+          </ul>
+        </div>
         </td>
       </tr>
       {% endfor %}

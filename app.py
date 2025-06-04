@@ -6,6 +6,7 @@ import threading
 
 from flask import Flask, request, redirect, session, render_template, url_for
 
+
 app = Flask(__name__)
 
 FHIR_SERVER_URL = "http://157.245.79.105:8080/fhir"
@@ -19,38 +20,29 @@ RESOURCE_TYPES = {
     "immunization": "Immunization"
 }
 
-client = SyncFHIRClient(FHIR_SERVER_URL)
+
+def getConnection(access_token):    
+    if(access_token!=""):
+        print('secured')
+        client = SyncFHIRClient(
+            FHIR_API_URL2,
+            extra_headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/fhir+json'
+                }
+            )
+    else:
+        client = SyncFHIRClient(FHIR_SERVER_URL)
+
+    return client
 
 def fetch_resources(resource_type, patient_id, result_container):
-    resources = client.resources(resource_type).search(patient=patient_id).limit(100).fetch()
+    access_token = session.get("access_token")
+    resources = getConnection(access_token).resources(resource_type).search(patient=patient_id).limit(100).fetch()
     result_container[resource_type] = resources
 
-# View functions 
-
-@app.route("/details/<patient_id>")
-def view_patient_details(patient_id):
-    resource_types = [
-        "Observation", "CarePlan", "MedicationRequest",
-        "Condition", "Goal", "Immunization"
-    ]
+# View functions
     
-    results = {}
-    threads = []
-
-    def fetch_resources(resource_type, patient_id, result_container):
-        resources = client.resources(resource_type).search(patient=patient_id).limit(100).fetch()
-        result_container[resource_type] = [r.to_dict() for r in resources]
-
-    for r_type in resource_types:
-        thread = threading.Thread(target=fetch_resources, args=(r_type, patient_id, results))
-        thread.start()
-        threads.append(thread)
-
-    for thread in threads:
-        thread.join()
-
-    return render_template("patient_details.html", patient_id=patient_id, data=results)
-
 @app.route('/')
 @app.route('/index')
 def index():
@@ -69,13 +61,15 @@ def createpatient():
             "gender": request.form.get("gender"),
             "birthDate": request.form.get("birthDate")
         }
-        client.resource("Patient", **data).save()
+        access_token = session.get("access_token")
+        getConnection(access_token).resource("Patient", **data).save()
         return redirect(url_for("listpatients"))
     return render_template("patient_form.html", action="Create", patient=None)
 
 @app.route("/editpatient/<patient_id>", methods=["GET", "POST"])
 def editpatient(patient_id):
-    patient = client.reference("Patient", patient_id).to_resource()
+    access_token = session.get("access_token")
+    patient = getConnection(access_token).reference("Patient", patient_id).to_resource()
     
     if request.method == "POST":
         patient["name"][0]["given"] = [request.form["given"]]
@@ -90,12 +84,14 @@ def editpatient(patient_id):
 
 @app.route("/deletepatient/<patient_id>", methods=["POST"])
 def deletepatient(patient_id):
-    client.reference("Patient", patient_id).to_resource().delete()
+    access_token = session.get("access_token")
+    getConnection(access_token).reference("Patient", patient_id).to_resource().delete()
     return redirect(url_for("listpatients"))
 
 @app.route('/listpatients', methods=["GET"])
 def listpatients():
-    search_query = client.resources("Patient")
+    access_token = session.get("access_token")
+    search_query = getConnection(access_token).resources("Patient")
     given = request.args.get("given")
     family = request.args.get("family")
     
@@ -107,99 +103,146 @@ def listpatients():
     patients = search_query.limit(20).fetch()    
     return render_template('listpatients.html', patients=patients)
 
-@app.route("/new/<patient_id>/<resource_type>", methods=["GET", "POST"])
-def create_resource(patient_id, resource_type):
-    if resource_type.lower() not in RESOURCE_TYPES:
-        return "Unsupported resource type", 400
+# ----------------- OBSERVATION ROUTES ------------------
 
-    resource_name = RESOURCE_TYPES[resource_type.lower()]
-    
-    if request.method == "POST":
-        # Minimal sample; should validate fields
-        data = {
-            "resourceType": resource_name,
-            "subject": {"reference": f"Patient/{patient_id}"}
-        }
-        # Add specific fields from form
-        if resource_name == "Observation":
-            data.update({
-                "status": request.form["status"],
-                "code": {"text": request.form["code"]},
-                "valueString": request.form.get("value")
-            })
-        elif resource_name == "Goal":
-            data.update({
-                "description": {"text": request.form["description"]},
-                "lifecycleStatus": request.form["status"]
-            })
-        elif resource_name == "Condition":
-            data.update({
-                "code": {"text": request.form["code"]},
-                "clinicalStatus": {"text": request.form["status"]}
-            })
-        elif resource_name == "CarePlan":
-            data.update({
-                "status": request.form["status"],
-                "intent": request.form["intent"],
-                "title": request.form["title"]
-            })
-        elif resource_name == "MedicationRequest":
-            data.update({
-                "status": request.form["status"],
-                "intent": request.form["intent"],
-                "medicationCodeableConcept": {"text": request.form["medication"]}
-            })
-        elif resource_name == "Immunization":
-            data.update({
-                "status": request.form["status"],
-                "vaccineCode": {"text": request.form["vaccine"]},
-                "occurrenceDateTime": request.form["date"]
-            })
+@app.route('/observation/<patient_id>')
+def list_observations(patient_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    observations = client.resources('Observation').search(patient=patient_id).limit(50).fetch()
+    return render_template("observation_view.html", patient_id=patient_id,
+                           observations=[o.serialize() for o in observations])
 
-        client.resource(resource_name, **data).save()
-        return redirect(url_for("view_patient_details", patient_id=patient_id))
+@app.route('/observationedit/<patient_id>', methods=["GET", "POST"])
+@app.route('/observationedit/<patient_id>/<obs_id>', methods=["GET", "POST"])
+def edit_observation(patient_id, obs_id=None):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    observation = None
 
-    return render_template("resource_form.html", patient_id=patient_id, resource_type=resource_type, action="Create")
-
-
-@app.route("/edit/<patient_id>/<resource_type>/<resource_id>", methods=["GET", "POST"])
-def edit_resource(patient_id, resource_type, resource_id):
-    if resource_type.lower() not in RESOURCE_TYPES:
-        return "Unsupported resource type", 400
-
-    resource_name = RESOURCE_TYPES[resource_type.lower()]
-    resource = client.reference(resource_name, resource_id).to_resource()
+    if obs_id:
+        observation = client.resources('Observation').get(obs_id)
+        obs_data = observation.serialize()
+    else:
+        obs_data = {}
 
     if request.method == "POST":
-        # Same structure as above
-        if resource_name == "Observation":
-            resource["status"] = request.form["status"]
-            resource["code"] = {"text": request.form["code"]}
-            resource["valueString"] = request.form.get("value")
-        elif resource_name == "Goal":
-            resource["description"] = {"text": request.form["description"]}
-            resource["lifecycleStatus"] = request.form["status"]
-        elif resource_name == "Condition":
-            resource["code"] = {"text": request.form["code"]}
-            resource["clinicalStatus"] = {"text": request.form["status"]}
-        elif resource_name == "CarePlan":
-            resource["status"] = request.form["status"]
-            resource["intent"] = request.form["intent"]
-            resource["title"] = request.form["title"]
-        elif resource_name == "MedicationRequest":
-            resource["status"] = request.form["status"]
-            resource["intent"] = request.form["intent"]
-            resource["medicationCodeableConcept"] = {"text": request.form["medication"]}
-        elif resource_name == "Immunization":
-            resource["status"] = request.form["status"]
-            resource["vaccineCode"] = {"text": request.form["vaccine"]}
-            resource["occurrenceDateTime"] = request.form["date"]
-        
-        resource.save()
-        return redirect(url_for("details", patient_id=patient_id))
+        form = request.form
+        if observation:
+            observation['valueQuantity']['value'] = float(form['value'])
+            observation['valueQuantity']['unit'] = form['unit']
+        else:
+            observation = client.resource('Observation', {
+                "status": "final",
+                "code": {"text": form['code']},
+                "subject": {"reference": f"Patient/{patient_id}"},
+                "valueQuantity": {
+                    "value": float(form['value']),
+                    "unit": form['unit']
+                }
+            })
+        observation.save()
+        return redirect(url_for('list_observations', patient_id=patient_id))
 
-    return render_template("resource_form.html", patient_id=patient_id, resource_type=resource_type, action="Edit", resource=resource)
+    return render_template("observation_form.html", obs=obs_data, patient_id=patient_id)
 
+@app.route('/goal/<patient_id>')
+def list_goals(patient_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    goals = client.resources('Goal').search(patient=patient_id).limit(50).fetch()
+    return render_template("goal_view.html", patient_id=patient_id,
+                           goals=[g.serialize() for g in goals])
+
+
+@app.route('/goaledit/<patient_id>', methods=["GET", "POST"])
+@app.route('/goaledit/<patient_id>/<goal_id>', methods=["GET", "POST"])
+def edit_goal(patient_id, goal_id=None):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    goal = None
+
+    if goal_id:
+        goal = client.resources('Goal').get(goal_id)
+        goal_data = goal.serialize()
+    else:
+        goal_data = {}
+
+    if request.method == "POST":
+        form = request.form
+        if goal:
+            goal['description']['text'] = form['description']
+            goal['lifecycleStatus'] = form['status']
+        else:
+            goal = client.resource('Goal', {
+                "lifecycleStatus": form['status'],
+                "description": {"text": form['description']},
+                "subject": {"reference": f"Patient/{patient_id}"}
+            })
+        goal.save()
+        return redirect(url_for('list_goals', patient_id=patient_id))
+
+    return render_template("goal_form.html", goal=goal_data, patient_id=patient_id)
+
+
+@app.route('/goaldelete/<patient_id>/<goal_id>', methods=["POST"])
+def delete_goal(patient_id, goal_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    goal = client.resources('Goal').get(goal_id)
+    goal.delete()
+    return redirect(url_for('list_goals', patient_id=patient_id))
+
+@app.route('/careplan/<patient_id>')
+def list_careplans(patient_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    plans = client.resources('CarePlan').search(patient=patient_id).limit(50).fetch()
+    return render_template("careplan_view.html", patient_id=patient_id,
+                           careplans=[c.serialize() for c in plans])
+
+
+@app.route('/careplanedit/<patient_id>', methods=["GET", "POST"])
+@app.route('/careplanedit/<patient_id>/<careplan_id>', methods=["GET", "POST"])
+def edit_careplan(patient_id, careplan_id=None):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    careplan = None
+
+    if careplan_id:
+        careplan = client.resources('CarePlan').get(careplan_id)
+        plan_data = careplan.serialize()
+    else:
+        plan_data = {}
+
+    if request.method == "POST":
+        form = request.form
+        if careplan:
+            careplan['status'] = form['status']
+            careplan['description'] = form['description']
+            careplan['intent'] = form['intent']
+            careplan['created'] = form['created']
+        else:
+            careplan = client.resource('CarePlan', {
+                "status": form['status'],
+                "intent": form['intent'],
+                "description": form['description'],
+                "created": form['created'],
+                "subject": {"reference": f"Patient/{patient_id}"}
+            })
+        careplan.save()
+        return redirect(url_for('list_careplans', patient_id=patient_id))
+
+    return render_template("careplan_form.html", careplan=plan_data, patient_id=patient_id)
+
+
+@app.route('/careplandelete/<patient_id>/<careplan_id>', methods=["POST"])
+def delete_careplan(patient_id, careplan_id):
+    access_token = session.get("access_token")
+    client = getConnection(access_token)
+    careplan = client.resources('CarePlan').get(careplan_id)
+    careplan.delete()
+    return redirect(url_for('list_careplans', patient_id=patient_id))
 
 # Epic Oauth Connectivity
 
@@ -339,21 +382,15 @@ def callBack():
 
     return redirect(url_for("secure"))
 
-@app.route("/secure")
+@app.route("/secure", methods=["GET", "POST"])
 def secure():
     access_token = session.get("access_token")
     if not access_token:
-        return redirect(url_for("launch2"))    
+        return redirect(url_for("launch2"))   
+     
+    patients = getConnection(access_token).resources('Patient').fetch()
+    return render_template('listpatients.html', patients=patients)
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/fhir+json"
-    }
-
-    patient = requests.get(f"{FHIR_API_URL2}Patient/", headers=headers).json()
-    print(patient)
-
-    return render_template("patient.html", patient=patient)
 @app.route("/reset")
 def reset():
     session.clear()
